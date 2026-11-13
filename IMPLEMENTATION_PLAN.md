@@ -1,6 +1,6 @@
 # Open Source Portal Extension: Implementation Plan
 
-**Status:** version 0.3.0 implements approved same-window tab reuse with host access limited to GitHub and the Open Source Portal. Strict builds and all 61 automated tests pass; native Edge checks verify reuse and the two-origin permission budget. **Safari macOS/iPhone source and isolated builds are implemented**, but native Safari/device validation and Apple app packaging are not complete. See [SAFARI_IMPLEMENTATION_PLAN.md](SAFARI_IMPLEMENTATION_PLAN.md) for remaining gates.
+**Status:** version 0.3.0 implements approved same-window tab reuse with host access limited to GitHub and the Open Source Portal. Strict builds and all 69 automated tests pass (61 extension cases plus 8 release-automation cases); native Edge checks verify reuse and the two-origin permission budget. **Safari macOS/iPhone source and isolated builds are implemented**, but native Safari/device validation and Apple app packaging are not complete. See [SAFARI_IMPLEMENTATION_PLAN.md](SAFARI_IMPLEMENTATION_PLAN.md) for remaining gates.
 
 Read [README.md](README.md) for installation and usage, or [IDEAS.md](IDEAS.md) for the product brief. This document distinguishes completed implementation from remaining acceptance checks and separately deferred publishing.
 
@@ -24,6 +24,7 @@ Read [README.md](README.md) for installation and usage, or [IDEAS.md](IDEAS.md) 
 | `safari-macos-entry` | Source done; runtime unverified | Shared desktop handlers and Safari-specific MV3 manifest; real Safari menus/shortcut/grants/wake still need testing |
 | `safari-iphone-popup` | Source done; runtime unverified | Accessible explicit destination popup, source-tab revalidation, inline errors and duplicate-tap prevention; no desktop API imports or background worker |
 | Same-window repository tab reuse | Done; Safari native check pending | Source-window/private-context filtering, GitHub subpage preservation, separate Overview/JIT matching, stale-candidate revalidation and new-tab fallback; explicit approval for two-origin host access |
+| GitHub test/release automation | Implemented; hosted execution pending | Push/PR/manual tests; manual default-patch release with mutually exclusive minor/major checkboxes, synchronized versions, tested runtime ZIPs/checksums, atomic version/tag push and GitHub Release publication |
 | `verify-extension` exhaustive manual matrix | Partial | Core checks above passed; remaining media/editable/frame contexts and independently observed manual reload/update are not recorded as passes |
 
 ### Remaining work, not implemented
@@ -37,7 +38,7 @@ Read [README.md](README.md) for installation and usage, or [IDEAS.md](IDEAS.md) 
 | `submit-edge-addons` | Deferred | Partner Center submission requires an authorized publisher and explicit final approval |
 | `verify-edge-release` | Deferred | Verify the actual certified store installation after publication |
 
-There is no store listing, automated `package:edge` script, or approved publishing action yet. The Edge release target remains a **Hidden Edge Add-ons** listing; official Microsoft-branded publishing is not required now. Safari packaging/distribution is planned separately, and Apple's visibility/publisher choices are not inherited from the Edge decision.
+There is no store listing or authorized store submission yet. GitHub release automation is implemented separately: `npm run package:release` packages Edge and both Safari resource targets after successful builds/tests. See [GitHub Actions and manual releases](README.md#github-actions-and-manual-releases). The Edge store release target remains a **Hidden Edge Add-ons** listing; official Microsoft-branded publishing is not required now. Safari app packaging/distribution is planned separately, and Apple's visibility/publisher choices are not inherited from the Edge decision.
 
 ### Safari implementation and validation boundary
 
@@ -96,8 +97,8 @@ The managed npm proxy advertised cross-host tarballs that npm 12 rejected. Insta
 
 | Check | Result |
 | --- | --- |
-| Strict builds and `npm test` | Pass for Edge and both Safari targets; 61 automated cases |
-| Managed-registry dependency restore | Previously verified clean; dependency versions unchanged |
+| Strict builds and `npm test` | Pass for Edge and both Safari targets; 69 automated cases |
+| Managed-registry dependency restore | Clean restore verified after pinning public TypeScript 6.0.3 for hosted CI; browser types unchanged |
 | Native headless Edge 157.0.4341.57 | Pass for 0.3.0 |
 | Native scope | Module loading, exact API/two-origin permissions, all four menus, shortcut navigation/reuse in both directions, preserved existing URLs/tab counts, Overview/JIT separation, other-window exclusion, unsupported sources, feedback, client-side navigation and stopped-worker wake |
 | JIT destination | Exact `/jit` mapping and menu handler verified by automated tests; native menu click not exercised |
@@ -468,7 +469,7 @@ If actual organization-restricted installation is required, ask the organization
 ### Release steps
 
 1. **Finish and verify the extension.** Complete the MVP implementation, browser acceptance checks, and user documentation. Confirm the release is stable and has no placeholder features. Publishing is not a substitute for the unpacked testing stage.
-2. **Prepare the tested ZIP.** Run `npm ci` and `npm test`, then package the tested contents of `dist/` into a versioned ZIP. `manifest.json` must be at the archive root beside the compiled JavaScript and icons, not nested under `dist/`. Exclude `src/`, tests, dependencies, session files, credentials, and unrelated documents. Inspect the archive and load its extracted contents in Edge before upload. A future `npm run package:edge` script can make this reproducible; it does not exist yet.
+2. **Prepare the tested ZIP.** Run `npm ci`, `npm test` and `npm run package:release`; select the Edge ZIP from `build/releases/` (not either Safari archive). `manifest.json` is at the archive root beside the compiled JavaScript and icons, not nested under `dist/`. The packager rejects unexpected/stale resources and verifies archive contents and checksums. Inspect the archive and load its extracted contents in Edge before store upload; successful GitHub packaging is not store certification.
 3. **Prepare the store materials.** Finalize the manifest name, description, and numeric version; an Edge-specific listing description; an original square logo; a support contact/URL; a hosted privacy policy; and certification notes. The current guide requires a listing description of 250-10,000 characters and a square logo of at least 128 x 128 pixels, recommending 300 x 300. Screenshots are optional but useful: show the repository context menu and toolbar behavior using public, non-sensitive examples. Describe JIT as navigation only, not automatic access, and do not reference competing browsers in Edge store metadata.
 4. **Create the submission in Partner Center.** An authorized owner opens the Edge workspace, selects **Create new extension**, uploads the ZIP, and resolves package validation issues. Set visibility to **Hidden** and select the intended markets. Fill in Properties, using an appropriate category such as Productivity, and provide support information.
 5. **Complete Privacy and Store listings.** State the single purpose, justify each permission, declare no remote code, and accurately disclose data handling. Fill in the required listing details for each included language and supply the accessible privacy policy URL. Keep the disclosures consistent with the shipped implementation, not just the intended design.

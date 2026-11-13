@@ -14,7 +14,7 @@ https://repos.opensource.microsoft.com/orgs/Azure-Samples/repos/Durable-Task-Sch
 
 ## Build and install in Edge
 
-Requires Node.js 22+ (tested with 24.16.0), npm, and desktop Microsoft Edge 123+. Edge remains the only browser with recorded native runtime validation.
+Requires Node.js 22+ (tested with 24.16.0), npm, and desktop Microsoft Edge 123+. Release archive tests also require Git, `zip` and `unzip` (available on macOS and GitHub's Ubuntu runners; Windows contributors can use WSL). Edge remains the only browser with recorded native runtime validation.
 
 ```sh
 npm ci
@@ -30,7 +30,7 @@ npm ci --registry=https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging
 npm test
 ```
 
-Use your approved registry. No user/global npm configuration was changed, and there is no need to relax npm's remote-package policy. The lockfile pins versions and integrity without embedding registry download URLs.
+Use your approved registry. No user/global npm configuration was changed, and there is no need to relax npm's remote-package policy. The lockfile pins versions and integrity without embedding registry download URLs. TypeScript is pinned to the publicly available `6.0.3`; the earlier managed-feed `7.0.2` pin was not available from public npm and would prevent a clean GitHub-hosted CI install.
 
 1. Open `edge://extensions`.
 2. Enable **Developer mode**, choose **Load unpacked**, and select this project's **`dist/`** folder.
@@ -179,8 +179,47 @@ npm run test:edge -- "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft 
 
 `tests/edge-smoke.mjs` verifies it is running Microsoft Edge and uses Node's built-in WebSocket/CDP support with a temporary browser profile, which is deleted afterward. It serves local test HTML at controlled GitHub/portal/unsupported URLs and exercises shortcut navigation/reuse in both directions, the exact two-site permission set, all four menu registrations, feedback, worker restart, and source-window isolation. Destination tabs can load GitHub or the real portal; authenticated access is not tested. No browser binary is downloaded by the script.
 
-**Verified:** strict builds for all three targets and 61 automated tests, including tab reuse, Overview/JIT separation, stale candidates, mobile cancellation/duplicate-tap/error/DOM behavior, and target resource/permission isolation. Native Edge **157.0.4341.57** checks pass for exact host permissions, reuse without URL changes/new tabs, GitHub subpage preservation, Overview/JIT separation and other-window exclusion. The user previously confirmed correct Edge menu placement and working navigation in both directions.
+**Verified extension behavior:** strict builds for all three targets and 61 navigation/popup/resource cases, including tab reuse, Overview/JIT separation, stale candidates, mobile cancellation/duplicate-tap/error/DOM behavior, and target resource/permission isolation. Release automation has additional versioning/archive regression tests. Native Edge **157.0.4341.57** checks pass for exact host permissions, reuse without URL changes/new tabs, GitHub subpage preservation, Overview/JIT separation and other-window exclusion. The user previously confirmed correct Edge menu placement and working navigation in both directions.
 
 **Remaining checks:** exhaustive Edge context-menu visibility on selections/media/editable fields/frames and independently observed manual extension reload/update; all native Safari/device checks described above. No authenticated JIT access or Apple packaging/runtime pass is claimed.
 
 See [IDEAS.md](IDEAS.md) for product scope and [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the design, remaining acceptance checks, and deferred Hidden Edge Add-ons publishing process.
+
+## GitHub Actions and manual releases
+
+The **Tests** workflow runs `npm ci`, `npm test` and release packaging on every push and pull request. It can also be started manually. It uses Node.js 24 on GitHub-hosted Ubuntu with read-only repository access and the runner's default npm registry. This does not change local registry settings: on Microsoft-managed machines, use the approved mirror shown above. This validates all three builds and the automated tests, not real Safari/iPhone or native Edge UI behavior.
+
+Once these workflows are on the default branch, open **Actions → Release → Run workflow**, select that branch, and choose:
+
+| Minor checkbox | Major checkbox | Next version |
+| --- | --- | --- |
+| Unchecked | Unchecked | Patch: `0.3.0` becomes `0.3.1` |
+| Checked | Unchecked | Minor: `0.3.0` becomes `0.4.0` |
+| Unchecked | Checked | Major: `0.3.0` becomes `1.0.0` |
+| Checked | Checked | Rejected; choose only one |
+
+The baseline is the highest stable `major.minor.patch` version in the synchronized source files or existing Git tags (with or without `v`). Prerelease/unrelated tags are ignored. The workflow updates `package.json`, both root version fields in `package-lock.json`, and all three manifests; then builds, tests and packages that exact version.
+
+After those checks, it commits the version bump, creates an annotated `vX.Y.Z` tag, and atomically pushes both to the default branch. It creates a draft GitHub Release, uploads all assets, then publishes it with generated release notes:
+
+- `open-source-portal-link-X.Y.Z-edge.zip`: extract and load unpacked in Edge.
+- `open-source-portal-link-X.Y.Z-safari-macos.zip`: temporary Safari extension resources.
+- `open-source-portal-link-X.Y.Z-safari-ios-resources.zip`: resources for a containing iPhone app, **not an installable iOS app**.
+- `SHA256SUMS.txt`: archive checksums.
+
+Each ZIP has `manifest.json` at its root and only the platform's runtime resources. No dependencies, tests, source TypeScript, credentials or signing material are included. Archives remain under Git-ignored `build/releases/`; they are not committed.
+
+Only the release job receives `contents: write`, using the built-in `GITHUB_TOKEN` without an extra secret. Releases are serialized and restricted to the default branch. Repository rules must permit the bot's version commit and tag; the workflow does not bypass protections. If another commit reaches the branch during a build, the atomic push fails without publishing a tag/release. The release runs its own tests because pushes made using `GITHUB_TOKEN` do not trigger another push workflow.
+
+This publishes a **GitHub release only**. It does not publish to Edge Add-ons or Apple's stores, sign an app, install extensions, change repository visibility, or grant portal access. Releases in a private repository remain accessible only to authorized users.
+
+### Packaging locally and recovering a partial release
+
+```sh
+npm test
+npm run package:release
+```
+
+The packaging command requires fresh builds with matching versions and an empty `build/releases/`; move or remove previous artifacts before repeating it.
+
+Failures before the atomic push leave the remote version/tags unchanged; start a new release run after fixing the cause. If the push succeeded but GitHub Release creation/upload/publication failed, **do not rerun to repair that tag**: a rerun selects another version. Check out the existing tag in a separate clean checkout, run `npm ci`, `npm test` and `npm run package:release`, then attach the complete ZIP/checksum set to its existing draft release (or create a release for that exact tag) and publish. Never delete or move a published tag to retry.

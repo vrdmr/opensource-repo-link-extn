@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      minor:
+        description: "Bump minor (otherwise patch)"
+        type: boolean
+        default: false
+      major:
+        description: "Bump major (do not also select minor)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - name: Require the default branch
+        env:
+          SELECTED_REF: ${{ github.ref }}
+        run: |
+          if [[ "$SELECTED_REF" != "refs/heads/$DEFAULT_BRANCH" ]]; then
+            echo "::error::Select the repository's default branch when running a release."
+            exit 1
+          fi
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Select and apply the next version
+        id: version
+        env:
+          BUMP_MINOR: ${{ inputs.minor }}
+          BUMP_MAJOR: ${{ inputs.major }}
+        run: node scripts/release-version.mjs
+      - run: npm ci
+      - run: npm test
+      - run: npm run package:release
+      - name: Commit and atomically push the version and tag
+        id: push
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- package.json package-lock.json public/manifest.json safari/macos/manifest.json safari/ios/manifest.json
+          git diff --cached --check
+          git commit -m "Release $TAG"
+          git tag -a "$TAG" -m "Release $VERSION"
+          git push --atomic origin "HEAD:refs/heads/$DEFAULT_BRANCH" "refs/tags/$TAG"
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+      - name: Create a GitHub Release with tested resources
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh release create "$TAG" build/releases/* \
+            --verify-tag \
+            --draft \
+            --title "$TAG" \
+            --generate-notes \
+            --notes "Edge: extract the ZIP and load unpacked. Safari macOS: temporary extension resources. Safari iPhone: resources only; requires a signed containing app. No store publication, signing, or access grants are performed."
+          gh release edit "$TAG" --draft=false --latest
+          printf '### Released %s\n\n' "$TAG" >> "$GITHUB_STEP_SUMMARY"
+          gh release view "$TAG" --json url --jq .url >> "$GITHUB_STEP_SUMMARY"
+      - name: Explain recovery after a publishing failure
+        if: failure() && steps.push.outputs.pushed == 'true'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          echo "::warning::The version commit and $TAG are already pushed. Finish the release for this existing tag instead of rerunning and bumping again."
+          printf '### Publishing incomplete\n\nThe version commit and `%s` were pushed. Complete the existing tag/draft release; a rerun selects another version. See README recovery instructions.\n' "$TAG" >> "$GITHUB_STEP_SUMMARY"

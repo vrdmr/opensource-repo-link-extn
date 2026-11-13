@@ -13,12 +13,13 @@
     "build:safari:ios": "node scripts/build-safari.mjs ios",
     "build:safari": "node scripts/build-safari.mjs",
     "package:safari": "node scripts/package-safari.mjs",
+    "package:release": "node scripts/package-release.mjs",
     "test": "npm run build && npm run build:safari && node --test tests/*.test.mjs",
     "test:safari": "npm run build:safari && node --test tests/navigation.test.mjs tests/safari-*.test.mjs",
     "test:edge": "npm run build && node tests/edge-smoke.mjs"
   },
   "devDependencies": {
     "@types/chrome": "0.3.7",
-    "typescript": "7.0.2"
+    "typescript": "6.0.3"
   }
 }
