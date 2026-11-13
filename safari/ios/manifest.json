@@ -1,10 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Open Source Portal Link",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Choose portal Overview/JIT for a supported GitHub repository, or return to GitHub from the portal.",
-  "permissions": ["activeTab"],
-  "host_permissions": ["https://github.com/*", "https://repos.opensource.microsoft.com/*"],
+  "permissions": [
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://github.com/*",
+    "https://repos.opensource.microsoft.com/*"
+  ],
   "action": {
     "default_title": "Open Source Portal Link",
     "default_popup": "popup.html",

@@ -1,10 +1,16 @@
 {
   "manifest_version": 3,
   "name": "Open Source Portal Link",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Open portal Overview/JIT for supported GitHub repositories, or return to GitHub from the portal.",
-  "permissions": ["activeTab", "contextMenus"],
-  "host_permissions": ["https://github.com/*", "https://repos.opensource.microsoft.com/*"],
+  "permissions": [
+    "activeTab",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "https://github.com/*",
+    "https://repos.opensource.microsoft.com/*"
+  ],
   "background": {
     "service_worker": "safari/macos-background.js",
     "type": "module"

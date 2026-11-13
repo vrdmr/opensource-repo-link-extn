@@ -1,6 +1,6 @@
 {
   "name": "open-source-portal-link",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Microsoft Edge extension for portal Overview/JIT and GitHub repository navigation.",
   "type": "module",

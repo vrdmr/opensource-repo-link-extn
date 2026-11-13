@@ -1,11 +1,17 @@
 {
   "manifest_version": 3,
   "name": "Open Source Portal Link",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Microsoft Edge: open portal Overview/JIT for supported GitHub repos, or return to GitHub from the portal.",
   "minimum_chrome_version": "123",
-  "permissions": ["activeTab", "contextMenus"],
-  "host_permissions": ["https://github.com/*", "https://repos.opensource.microsoft.com/*"],
+  "permissions": [
+    "activeTab",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "https://github.com/*",
+    "https://repos.opensource.microsoft.com/*"
+  ],
   "background": {
     "service_worker": "service-worker.js",
     "type": "module"
