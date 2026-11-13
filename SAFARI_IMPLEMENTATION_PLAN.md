@@ -1,8 +1,18 @@
 # Safari Implementation Plan: macOS and iPhone
 
-**Status: planned, not implemented.** The current version 0.2.0 build supports Microsoft Edge. This document plans adding Safari on macOS and iPhone without regressing Edge. It authorizes no implementation, developer-account changes, signing, uploads, or publication.
+**Status: Safari source and isolated development builds implemented; native validation incomplete.** Version 0.3.0 adds user-approved same-window tab reuse and host access limited to GitHub/the portal across all targets. No Apple account changes, native project generation, signing, uploads, or publication were performed.
 
-The [main implementation plan](IMPLEMENTATION_PLAN.md#implementation-status) remains the status index for completed Edge work. All Safari work below is pending. Apple and MDN documentation was reviewed for this plan; documentation compatibility is not evidence that this extension works in Safari.
+The [main implementation plan](IMPLEMENTATION_PLAN.md#implementation-status) indexes completed work. The design below is the implementation contract; the [status table](#implementation-sequence-and-dependencies) distinguishes source completion from remaining native gates. Apple/MDN documentation and passing Node tests are not evidence that this extension runs correctly in Safari.
+
+## Current results and blockers
+
+- `npm test` passes all three strict builds and 61 automated cases, including repository/section matching, candidate revalidation, private/window boundaries, fallback and popup cancellation.
+- Native Edge 157.0.4341.57 checks verify exact two-origin permissions and actual shortcut reuse without URL changes or duplicate tabs. Safari runtime results are not inferred from Edge.
+- macOS output is `build/safari/macos/`; recent Safari can temporarily load this folder without Xcode. [Local instructions](README.md#test-locally-in-macos-safari-without-xcode) are ready for user testing.
+- iPhone output is `build/safari/ios/`; it has a local popup, no worker, `activeTab` and the same two host grants as desktop.
+- The user confirmed GitHub-to-portal reuse in Safari 27.2 but reported reverse reuse failing. Read-only native settings inspection found `github.com = Ask` and `repos.opensource.microsoft.com = Allow`; reverse lookup requires the user's GitHub grant. No permission was changed, and reverse native verification remains pending.
+- The selected developer directory is `/Library/Developer/CommandLineTools`; full Xcode, both Safari packager names, and iPhone simulator tooling are unavailable.
+- `package:safari` can generate separate native projects when Xcode is available. Its missing-tool failure is verified, but successful Apple packaging, app builds, simulator/physical-iPhone behavior, and exact support floors remain blocked/unverified.
 
 ## Goal and scope
 
@@ -11,10 +21,12 @@ Reuse the current TypeScript URL mapper, eight-organization allowlist, and Overv
 | Target | Planned experience | Status |
 | --- | --- | --- |
 | Microsoft Edge desktop | Existing menus, direct toolbar action, and shortcut stay unchanged | Implemented; regression gate |
-| Safari on macOS | Overview/JIT context submenu, reverse GitHub menu, direct toolbar action, and desktop shortcut | Planned |
-| Safari on iPhone | Open the extension from Safari's page/More menu, then choose a destination in a touch-friendly popup | Planned |
+| Safari on macOS | Overview/JIT context submenu, reverse GitHub menu, direct toolbar action, and desktop shortcut | Source/built resources ready; native validation pending |
+| Safari on iPhone | Open the extension from Safari's page/More menu, then choose a destination in a touch-friendly popup | Source/built resources ready; app/device validation blocked |
 
-Both Safari targets use the current top-level page, never a clicked link, selected text, embedded frame, or cached repository from another tab. Preserve repository case, canonical organization spelling, and rejection of unsupported origins/routes/organizations. Open one new destination tab per successful invocation; leave the source tab open.
+Both Safari targets derive the destination from the top-level source, never a clicked link, selected text, frame or cached repository. Preserve repository spelling/canonical organization output and reject unsupported origins/routes/organizations. Activate an existing matching destination in the source window without changing its URL, otherwise create a new tab; source stays open.
+
+GitHub reuse accepts any page in the same repository case-insensitively. Portal Overview matches the root (optional trailing slash/query/fragment); JIT matches `/jit` and nested JIT pages, never Overview or another section. Query only the target origin/window, exclude other private contexts, and re-read candidate URL/window/context/pending navigation before activation. Failed/denied lookup or stale candidates fall back to creation. If mobile Safari exposes no usable source window ID, skip reuse rather than guessing another window.
 
 JIT remains navigation to `/jit` only. No automatic access requests, approvals, credentials, portal APIs, repository-existence checks, telemetry, or GitHub/portal page injection.
 
@@ -28,15 +40,15 @@ Chrome support is not restored. iPad-specific UX, visionOS, Safari web apps, emb
 | --- | --- |
 | Safari supports `chrome.*` and `browser.*`, callbacks and promises; MV3 support exists from Safari 15.4 [1] | Keep the current namespace and compiler-first approach unless a tested API difference requires a small adapter. This does not establish a minimum supported Safari version |
 | `contextMenus` / `menus` are unsupported on iOS [1] | Do not include or register desktop context menus in the iPhone target |
-| Safari prompts for website access and recommends `activeTab` to minimize access [2] | Test fresh grants, denial, revocation, and both source origins; never silently expand permissions |
+| Safari prompts for website access and recommends minimal grants [2] | Two-origin host access is explicitly approved for background-tab lookup; test actual grants, denial/revocation and `activeTab` fallback |
 | An action with a popup does not dispatch `action.onClicked`; popup JavaScript can use extension APIs [3] | The iPhone popup handles its own buttons; it cannot rely on the current desktop click handler firing |
 | Safari supports extension background service workers and background documents, with selection rules [4] | Probe the current module service worker on macOS first; use a Safari-only nonpersistent alternative only if needed |
 | Safari 26 introduced user shortcut changes in extension settings [5] | Validate the actual shortcut and the available remapping UI on each supported desktop version |
 | Current macOS Safari documentation allows temporary folder/ZIP installs without Xcode; they expire on quit or after 24 hours [6] | Useful for a desktop prototype, not a durable installation or an iPhone distribution path |
-| Apple offers a local packager and an App Store Connect web packager [7][8] | Local Xcode is the preferred development route here; cloud packaging is a later release option, not mandatory |
+| Apple offers a local packager and an App Store Connect web packager [7][8] | Xcode is needed for local containing-app/simulator work, not JavaScript builds or recent Safari's desktop temporary install |
 | macOS distribution outside the App Store can use a Developer ID-signed, notarized containing app [9] | A separate approved desktop release route; not an equivalent iPhone sideloading option |
 
-**Compatibility gate:** establish whether `activeTab` alone exposes the invoking tab URL through the proposed iPhone popup flow, whether Safari desktop grants access on each supported gesture, and whether safe source-tab/window association is retained. Verify actual behavior before finalizing manifests. Apple API documentation or passing Node mocks cannot close this gate.
+**Native compatibility gate, still open:** establish actual URL visibility under approved/denied host grants and `activeTab`, desktop gesture behavior, safe source-tab/window association and same-window tab activation. Source implementation uses documented APIs; this does not waive Safari/device testing.
 
 ## Interaction design
 
@@ -63,11 +75,11 @@ The user enables the containing app's extension, visits a repository, opens Safa
 | Unsupported page or organization | Short explanation; no enabled destination buttons |
 | Missing URL / denied or revoked permission | Explain how to grant access or reopen the extension from the source page; do not guess a repository |
 
-Opening the panel alone must not navigate. Each successful button tap opens one new selected Safari tab and preserves the source. JIT must be reachable without a keyboard or long-press menu.
+Opening the panel alone must not navigate. A button tap reuses a matching tab in the source window or creates one, preserving the source. JIT must be reachable without a keyboard or long-press menu.
 
 Use semantic buttons, comfortable touch targets, responsive layout, light/dark support, readable text scaling, and VoiceOver labels/status announcements. Show loading, denied, unsupported, opening, and failure states inline; do not rely on desktop hover tooltips or badge colors on a phone. Keep scripts/styles local and compatible with extension CSP; render repository text as text, not HTML.
 
-Capture the invoking tab ID and its validated source URL only while the popup is open. On a destination tap, re-read that same tab, revalidate eligibility, and fail with a refresh/reopen message if the tab closed or its URL changed. Never fall back to a different active tab. Disable buttons while opening to prevent duplicate taps and re-enable on a confirmed failure. Close the popup only after a successful creation result.
+Capture the invoking tab ID and its validated URL only while the popup is open. On a tap, re-read the same tab, verify it is still selected/current and eligible, and fail if it closed/changed. Never substitute another source. Disable buttons while opening and re-enable on confirmed failure. Close only after successful activation or creation. Dismissal cancels pending destination lookup before it can activate/create a tab.
 
 Prefer a self-contained popup with **no iOS background worker**: resolve the active tab on explicit popup opening, then call the shared navigator on a button click. This avoids importing desktop listeners or relying on suspended-worker memory. Verify popup lifetime and navigation completion on a physical iPhone; add a minimal message-driven worker only if measured behavior requires it. Any such fallback needs validated sender, action, and source-tab context, and must not accept arbitrary destination URLs.
 
@@ -75,16 +87,16 @@ Prefer a self-contained popup with **no iOS background worker**: resolve the act
 
 ### Reuse and small refactors
 
-| Existing file | Planned change |
+| File | Implemented change |
 | --- | --- |
 | `src/repo-url.ts` | Retain the single canonical mapper/allowlist; reuse it from all targets |
-| `src/service-worker.ts` | Remain the Edge entry point; extract only reusable navigation/menu behavior and preserve existing behavior |
-| `tests/repo-url.test.mjs`, `tests/service-worker.test.mjs` | Keep current cases as regressions; add focused cases for any shared refactor |
+| `src/service-worker.ts` | Edge entry point calls the extracted desktop registration; shared navigator and desktop feedback remain separate |
+| `tests/repo-url.test.mjs`, `tests/service-worker.test.mjs` | Original cases retained; `tests/helpers/desktop-tests.mjs` exercises both desktop entries, including asynchronous parent-menu creation |
 | `public/manifest.json`, `public/icons/` | Remain Edge assets; icons may be copied into Safari outputs without copying the Edge manifest |
-| `tsconfig.json`, `scripts/copy-assets.mjs`, `scripts/clean.mjs` | Keep `dist/` as the existing Edge output. Narrow entry-point selection so Safari modules/assets do not leak into Edge |
+| `tsconfig.json`, `scripts/copy-assets.mjs`, `scripts/clean.mjs` | `dist/` remains Edge-only; compiler entry-point selection excludes Safari modules/assets |
 | `tests/edge-smoke.mjs` | Keep Edge-specific; it is not a Safari runner |
 
-Proposed new files, to be created only during implementation:
+Added files and generated output locations:
 
 ```text
 src/
@@ -92,7 +104,9 @@ src/
   desktop-actions.ts             reusable desktop menu/action registration
   safari/
     macos-background.ts          desktop Safari entry, no iOS imports
+    popup-controller.ts          source-bound mobile navigation state machine
     ios-popup.ts                 popup lifecycle, source binding, buttons and errors
+    theme.ts                     external theme script, compatible with extension CSP
 safari/
   macos/manifest.json
   ios/manifest.json
@@ -101,65 +115,69 @@ safari/
 tsconfig.safari-macos.json
 tsconfig.safari-ios.json
 scripts/build-safari.mjs
+scripts/package-safari.mjs
 tests/
   navigation.test.mjs
   safari-popup.test.mjs
+  safari-desktop.test.mjs
   safari-build.test.mjs
-apple/
-  OpenSourcePortal/              generated then maintained Xcode project/targets
+apple/                           not generated here; requires full Xcode
+  macos/                         separate macOS containing-app project
+  ios/                           separate iPhone containing-app project
 build/
   safari/macos/                 generated extension resources only
   safari/ios/                   generated extension resources only
 ```
 
-`navigation.ts` accepts a validated source-tab context and a fixed destination enum, not arbitrary URLs. It constructs destinations through `repo-url.ts`, attempts one tab creation, and returns a structured success/failure result. Desktop badge/title updates and mobile inline feedback are presentation adapters; feedback failures cannot prevent an otherwise valid open. Do not copy Edge's `windowId` assumptions unexamined into iOS.
+`navigation.ts` accepts a source-tab context, fixed destination enum, narrow tab API adapter and optional popup cancellation check. It constructs URLs through `repo-url.ts`, looks for a validated same-window match, activates it without a URL update, or attempts one creation. It returns success/failure plus whether a tab was reused. Desktop badge/title and mobile inline status are separate presentation adapters; feedback failures cannot block navigation.
 
-Desktop registration must be explicitly invoked by the appropriate entry point. Merely guarding one menu call is insufficient: the current worker registers `contextMenus.onClicked` at module load, which cannot be imported into the iPhone popup. Keep iOS imports free of desktop initialization side effects.
+Desktop registration is explicitly invoked by each desktop entry, synchronously during module loading. The iPhone popup imports only the shared navigator/mapper and mobile controller; loading it does not touch `contextMenus`, `commands`, runtime install listeners, or desktop action feedback. This import boundary is tested with only a `tabs` API.
 
-Keep `chrome.*` where supported; no blanket namespace rewrite or polyfill dependency is planned. Introduce only the compatibility handling justified by the prototype. Preserve top-level synchronous desktop listener registration for background restart.
+The port retains `chrome.*` with no polyfill or new dependencies. Menu creation waits for each completion callback before creating its children; the callback reads `runtime.lastError`. The popup's theme script and CSS are external local assets rather than inline code, preserving MV3 CSP.
 
 ### Target manifests
 
-| Contract | Edge, unchanged | Safari macOS, proposed | Safari iPhone, proposed |
+| Contract | Edge | Safari macOS development build | Safari iPhone development build |
 | --- | --- | --- | --- |
 | Manifest | MV3 | MV3, Safari-specific metadata | MV3, Safari-specific metadata |
-| Permissions | `activeTab`, `contextMenus` | Start with `activeTab`, `contextMenus` | Start with `activeTab` only |
-| Host permissions | None | None initially | None initially |
+| API permissions | `activeTab`, `contextMenus` | `activeTab`, `contextMenus` | `activeTab` |
+| Host permissions | Exact HTTPS GitHub and portal | Same two origins | Same two origins |
 | Action | No popup; direct handler | No popup; direct handler | `default_popup`; explicit destination buttons |
 | Background | Module service worker | Module service worker first; tested nonpersistent alternative if required | None initially |
 | Menus / commands | Existing | Tested desktop menus and `_execute_action` shortcut | No `contextMenus` permission, menu code, or keyboard command |
 | Version floor | Existing `minimum_chrome_version` | Apple deployment settings and tested Safari floor; omit Chromium-only key | Apple deployment settings and tested iOS floor; omit Chromium-only key |
 
-Querying a tab or creating a destination is not by itself a reason to add the broad `tabs` permission. Verify URL visibility under the actual Safari grant. If a target genuinely requires host access, stop at the compatibility gate and propose the smallest exact-origin change for approval; do not silently add `<all_urls>`, `tabs`, `scripting`, or persistent website access. Keep Edge permissions unchanged regardless.
+The user approved `https://github.com/*` and `https://repos.opensource.microsoft.com/*` for background-tab URL lookup in version 0.3.0. This intentionally supersedes the earlier no-host design; it does not authorize more origins or broad `tabs`, `<all_urls>`, or `scripting` permissions. Host grants cover these origins beyond the eight organizations, but routing/reuse still enforce the allowlist. Browser access warnings can describe broader data capabilities; the code reads tab metadata only on invocation.
 
 ### Build/output guarantees
 
 - Preserve existing `npm run build`, `npm test`, `npm run test:edge`, and Edge installation from `dist/`.
-- Add proposed `build:safari:macos`, `build:safari:ios`, and `build:safari` commands with compiler-only target configs and explicit asset lists. These commands do not exist yet.
-- Keep target output outside `dist/`. The current `src/**/*.ts` inclusion and recursive `public/` copy need target selection, not an extra blanket copy step.
+- `build:safari:macos`, `build:safari:ios`, and `build:safari` use compiler-only target configs and explicit asset lists.
+- Edge's compiler includes only its worker entry and imported modules. Safari assets live outside `public/` so the existing Edge copy step cannot copy a mobile manifest/popup.
 - Each build cleans only its own known generated subtree. Building or failing a Safari target must not delete or overwrite a working Edge build or an Apple project.
 - Each Safari output has `manifest.json` at its root and only the relevant compiled modules/icons/UI assets; no source, tests, dependencies, other target manifest, signing data, or session files.
-- Add generated Safari outputs, Xcode DerivedData/build products, and per-user Xcode files to ignore rules. Keep the intentional project configuration reproducible.
-- Source product versions from one deliberate release version and validate agreement across manifests and Apple target settings; use Apple's separate build-number increments for uploads. Do not change the current Edge version during planning.
+- Generated Safari outputs, Xcode DerivedData/build products, per-user Xcode files and signing material are ignored. Keep intentional future native project configuration reproducible.
+- The Safari build validates that package/Edge/Safari manifest versions agree at 0.3.0. Generated Apple target versions/build numbers must be inspected during packaging; use Apple's separate build-number increments for uploads.
+- `npm test` builds all targets and runs their focused cases; `npm run test:safari` builds Safari and runs its focused cases. `npm run build` remains Edge-only.
 
 ## Implementation sequence and dependencies
 
-All rows are **planned/pending**, not done. Approval to implement the port is required before starting them. Edge store publication is not a prerequisite for Safari development.
+Implementation is authorized; release actions are not. Source dependencies are complete, but native compatibility/package/device evidence remains open. Edge store publication is not a prerequisite.
 
-| ID | Work | Prerequisites | Completion evidence |
+| ID | Status | Work/evidence | Prerequisites for remaining work |
 | --- | --- | --- | --- |
-| `safari-compatibility` | Record target/tool versions; probe macOS worker/menus/shortcut and iPhone popup/source URL access with minimal permissions | Implementation approval | Exact supported-baseline proposal and actual capability/grant results; blockers recorded rather than hidden |
-| `safari-shared-navigation` | Extract reusable navigator and desktop registration without changing Edge behavior | `safari-compatibility` | Existing 23 tests and native Edge checks remain passing; no iOS import side effects |
-| `safari-target-builds` | Add isolated manifests, compiler configs, asset lists, and build commands using the probe entry points initially | `safari-shared-navigation` | Target scaffolds build independently with exact permissions/resources; complete Safari behavior remains in the next two tasks |
-| `safari-macos-entry` | Implement desktop Safari wiring and any narrowly needed API adaptations | `safari-target-builds` | Overview/JIT/reverse menus, direct action, shortcut and restart behavior exercised in Safari |
-| `safari-iphone-popup` | Implement touch/accessible popup and source-bound navigation | `safari-target-builds` | Correct conditional actions, denied/changed/closed-tab handling, and one-tab-per-tap behavior |
-| `safari-apple-projects` | Create containing apps/extension targets and reproducible target resource sync | `safari-target-builds` | macOS app and iPhone simulator builds contain the right manifests/resources; signing prerequisites identified |
-| `safari-device-validation` | Run regression, macOS, iPhone simulator, and physical-device matrix | `safari-macos-entry`, `safari-iphone-popup`, `safari-apple-projects` | Actual versions/results recorded; physical iPhone gate passes or remains explicitly blocked |
-| `safari-user-docs` | Write activation, permissions, usage, troubleshooting, and supported-version instructions | `safari-device-validation` | Instructions match observed behavior; Safari support is claimed only for passing targets |
-| `safari-release-preparation` | Finalize publisher identity, signed archives, privacy/support assets, screenshots and review instructions | `safari-device-validation`, `safari-user-docs`, separate release authorization | Tested, inspectable release candidates and approved disclosure/identity choices |
-| `safari-distribution` | Distribute approved beta/release builds and verify clean installs/updates | `safari-release-preparation`, explicit upload/submission approval | TestFlight/App Store or approved notarized macOS installation validated; actual links/versions recorded |
+| `safari-compatibility` | Partial / blocked | Documentation/tool checks complete; real grant, worker, popup and support-floor probes not run | User local desktop testing; full Xcode/simulator and later authorized device access |
+| `safari-shared-navigation` | Done | Shared navigator and explicit desktop registration; original tests plus native Edge regression pass | None for completed source work |
+| `safari-target-builds` | Done | Isolated manifests, entry points, asset lists, version checks and build commands; output isolation verified | None |
+| `safari-macos-entry` | Source done; native pending | Desktop handler suite passes for Safari entry; menus/direct action/shortcut/wake need Safari itself | `safari-compatibility` desktop checks |
+| `safari-iphone-popup` | Source done; native pending | Conditional actions, accessibility markup, source-bound navigation, errors and duplicate-tap tests pass | `safari-compatibility` mobile checks |
+| `safari-apple-projects` | Helper done / blocked | Packaging helper selects platform/tool, builds resources, rejects overwrite and fails clearly without Xcode; no Apple project generated | `safari-target-builds`, full Xcode; authorized identifiers/team for actual packaging |
+| `safari-device-validation` | Blocked | Node coverage and native Edge checks pass; Safari matrix below has not run | Compatibility, desktop/mobile source, generated Apple projects; physical iPhone |
+| `safari-user-docs` | Development docs done; release docs pending | README includes local folder loading, mobile usage, packaging, permissions and explicit limitations | Device-validation evidence for actual version floors and confirmed settings labels |
+| `safari-release-preparation` | Deferred | Signed archives, authorized publisher/channel, support/privacy assets and review instructions | Device validation, finalized user docs, separate release authorization |
+| `safari-distribution` | Deferred | Approved beta/release distribution and clean install/update validation | Release preparation and explicit upload/submission approval |
 
-The small compatibility probe may use temporary prototype resources and a minimal generated simulator host before the maintained builds/project work. Start with real macOS Safari and iPhone simulator behavior; retain the physical-iPhone gate for support claims. The target-build phase can compile those minimal entry points before desktop/mobile features are finished, avoiding a dependency on yet-unimplemented full handlers. Clean up superseded prototype artifacts; do not treat successful scaffolding as completed runtime validation or ship placeholder features.
+Source implementation is tested while native validation remains blocked. Do not treat compilation, packaging scaffolding or Node mocks as a native Safari pass. If grant, window/reuse or popup-lifetime checks fail, make the smallest adapter correction without expanding beyond the approved two origins.
 
 ## Verification plan and acceptance gates
 
@@ -180,7 +198,7 @@ Node tests can cover logic, not Safari grants or actual extension UI. Playwright
 | Destinations | Both submenu choices, reverse menu, toolbar, shortcut | Overview/JIT buttons on GitHub; GitHub button on portal |
 | Source integrity | Different-link click and mixed-origin frame cannot override top-level page | Tab switch, navigation, closed source, popup dismiss/reopen cannot use stale/wrong source |
 | Permissions | Fresh profile; first grant, denied/revoked/expired grant; each invocation gesture | Same for both origins; URL availability when popup opens and on tap |
-| Placement | New active tab in source window; original stays; multiple windows | New selected Safari tab; source stays; verify tab-group/private-context behavior, not desktop window assumptions |
+| Placement/reuse | Matching tab activated without URL changes; otherwise new tab in source window. Other windows/private contexts excluded; Overview/JIT separate | Same when a usable source window ID exists; otherwise new-tab fallback. Verify tab-group/private-context behavior, not desktop assumptions |
 | Lifecycle | Background idle/termination/restart; browser/app restart; no duplicate menus after update | Popup dismissal, app background/resume, Safari restart, repeated openings, no persisted stale tab |
 | Errors/access | Unsupported pages, failures, unavailable portal/sign-in | Inline messages; denied site access, offline/errors, visible destination and normal sign-in |
 | Accessibility | Keyboard and visible feedback | VoiceOver, text scaling, light/dark, portrait/landscape, adequate touch targets |
@@ -188,7 +206,7 @@ Node tests can cover logic, not Safari grants or actual extension UI. Playwright
 
 For each claimed platform, record OS/Safari version, package version, installation route, grant state, expected/observed URL and outcome. Use public repository fixtures for routing; use authorized accounts only for optional portal access checks and do not save credentials or confidential screenshots.
 
-**Release gates:** no Edge regressions; narrow permissions established on both Safari targets; exact destination and source binding demonstrated; desktop UI/shortcut working on the declared floor; all iPhone actions working on a physical iPhone, not only simulator; packaged installation/relaunch/update verified. If access to hardware or signing is unavailable, mark the affected gate blocked and do not label iPhone support complete.
+**Release gates:** no Edge regressions; actual two-site grants and denied-lookup fallback established on Safari; exact destination/source binding, reuse isolation and section separation demonstrated; desktop UI/shortcut working on the declared floor; all iPhone actions working on a physical iPhone, not only simulator; packaged installation/relaunch/update verified. Unavailable hardware/signing blocks the affected gate, not a pass.
 
 Correct JIT navigation is required. Successful JIT authorization or access grants are not extension functionality. Mobile portal usability and sign-in restrictions must be disclosed if they limit the experience despite correct routing.
 
@@ -198,9 +216,11 @@ Correct JIT navigation is required. Successful JIT authorization or access grant
 
 Use a Mac with a compatible full Xcode installation and iPhone simulator for implementation. Current Safari's temporary desktop folder/ZIP loading is useful for initial probes; if unavailable on the chosen baseline, use the generated macOS containing app instead. Temporary loading is not a permanent install and does not establish iPhone support [6].
 
-Use `xcrun safari-web-extension-packager` to create the macOS and iOS containing-app/extension targets from the respective generated resource folders. Older Xcode tooling called this `safari-web-extension-converter`; check the installed tool rather than assuming either executable exists [7]. No command is run by this plan.
+`npm run package:safari -- <macos|ios> --bundle-identifier <authorized.id>` checks for `safari-web-extension-packager`, falling back to its older `safari-web-extension-converter` name [7]. It rebuilds the selected resources and invokes `xcrun` with the platform-only, Swift, no-open and no-prompt flags. It performs no signing or uploads. Here, the missing-tool guard failed as intended before project generation.
 
-Prefer one maintained Xcode project with separate macOS/iOS app and extension targets and target-specific resource sets. Never share one manifest file between platform targets by accident. The packager links original resources by default; either deliberately reference the generated target outputs or use `--copy-resources` with an explicit sync/build phase. Test that rebuilding updates the packaged resources and that missing/stale outputs fail the package build.
+**Implementation adjustment:** use separate maintained projects under `apple/macos/` and `apple/ios/` rather than one combined project. Each is generated directly from its platform resource directory, avoiding hand-edited shared resource membership or mixing manifests. The helper does not use `--copy-resources`: Apple's documented default references the original generated resources. It refuses to overwrite an existing target directory; native edits are never silently discarded.
+
+Generate each project once when Xcode is available, then rebuild the matching extension resources before building/running it in Xcode. Review resource membership after adding/removing modules. Validate clean-clone/resource paths, resource freshness, app/extension version settings, iPhone device-family settings, and missing-output behavior before maintaining/committing generated native projects or claiming packaging complete. None of those Xcode checks ran here.
 
 Keep the generated native wrappers minimal: explain how to enable/use the extension and link to approved support/privacy information. Do not add a native URL router, embedded portal browser, login flow, native messaging, or App Groups unless a proven requirement needs them. Use authorized bundle identifiers/signing teams; keep credentials/certificates/profiles out of source.
 
@@ -231,7 +251,7 @@ After an approved beta/release, verify a clean Mac and physical iPhone install, 
 | Exact version floor | Current stable desktop/iPhone releases first; no legacy promise | Record tested Safari/OS/Xcode versions and deployment targets after compatibility probes |
 | iPhone UI | Explicit action popup; no context menu or keyboard dependency | Real popup invocation, usable controls, grant/source behavior and accessibility |
 | Desktop background | Existing MV3 module-worker model | Actual startup, menu setup, action/shortcut and wake tests; Safari-only fallback if necessary |
-| Permission budget | Desktop `activeTab` + `contextMenus`; iPhone `activeTab` | Both origins and permission states pass without broader access; any expansion needs approval |
+| Permission budget | Desktop `activeTab` + `contextMenus`; iPhone `activeTab`; both targets have approved GitHub/portal host grants | Actual granted/denied/revoked access and safe lookup fallback pass; further expansion needs approval |
 | iPhone source/window semantics | Bind to invoking tab; never substitute another tab | Prove fresh URL revalidation and destination placement, including tab groups/private mode |
 | Packaging | Local Xcode with separate target resources | Correct resources in both app bundles and reproducible clean rebuilds |
 | Distribution identity/channel | TestFlight first; durable channel chosen separately | Authorized Apple team, signing, assets, applicable review and explicit release approval |

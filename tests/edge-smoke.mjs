@@ -116,6 +116,23 @@ async function expectDestination(page, expectedUrl) {
   throw new Error("Native keyboard invocation did not open the expected destination.");
 }
 
+async function expectReuse(page, workerSession, existing) {
+  const before = await evaluate(workerSession, "chrome.tabs.query({})");
+  await shortcut(page);
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const active = await evaluate(workerSession, `chrome.tabs.get(${existing.id})`);
+    if (active.active) {
+      assert.equal(active.url, existing.url, "Reuse must preserve the existing page.");
+      const after = await evaluate(workerSession, "chrome.tabs.query({})");
+      assert.deepEqual(after.map(({ id }) => id).sort(), before.map(({ id }) => id).sort(),
+        "Reuse must not create or remove tabs.");
+      return;
+    }
+    await delay(100);
+  }
+  throw new Error("Native keyboard invocation did not activate the existing destination.");
+}
+
 try {
   let endpoint;
   for (let attempt = 0; attempt < 100; attempt++) {
@@ -167,7 +184,9 @@ try {
   assert.equal(manifest.background.type, "module");
   const permissions = await evaluate(workerSession, "chrome.permissions.getAll()");
   assert.deepEqual(permissions.permissions.sort(), ["activeTab", "contextMenus"]);
-  assert.deepEqual(permissions.origins, []);
+  assert.deepEqual(permissions.origins.sort(), [
+    "https://github.com/*", "https://repos.opensource.microsoft.com/*",
+  ]);
   const commands = await evaluate(workerSession, "chrome.commands.getAll()");
   assert.ok(commands.find(({ name }) => name === "_execute_action")?.shortcut);
   let menuReady = false;
@@ -186,7 +205,9 @@ try {
   );
   const tabsBefore = await evaluate(workerSession, "chrome.tabs.query({})");
   const source = tabsBefore.reduce((last, tab) => tab.id > last.id ? tab : last);
-  assert.equal(source.url, undefined, "Source URL must be withheld before invocation.");
+  assert.equal(source.url,
+    "https://github.com/Azure-Samples/Durable-Task-Scheduler/issues/42",
+    "Approved GitHub host access should expose matching tab URLs.");
   const portal = await expectDestination(
     page,
     "https://repos.opensource.microsoft.com/orgs/Azure-Samples/repos/Durable-Task-Scheduler",
@@ -197,7 +218,29 @@ try {
   assert.equal(opened.active, true);
   assert.ok(tabsAfter.some(({ id }) => id === source.id));
   await send("Target.closeTarget", { targetId: portal.targetId });
-  console.log("PASS: user gesture grants URL access and opens one focused overview in the source window");
+  console.log("PASS: user gesture opens one focused overview in the source window with narrow host access");
+
+  const portalFixture = await fixture(
+    "https://repos.opensource.microsoft.com/orgs/Azure-Samples/repos/Durable-Task-Scheduler?view=kept#details",
+  );
+  const overviewTab = (await evaluate(workerSession, "chrome.tabs.query({})"))
+    .find(({ url }) => url?.endsWith("?view=kept#details"));
+  assert.ok(overviewTab);
+  assert.equal(overviewTab.windowId, source.windowId);
+  await expectReuse(page, workerSession, overviewTab);
+  await expectReuse(portalFixture, workerSession, source);
+  await send("Target.closeTarget", { targetId: portalFixture.targetId });
+  console.log("PASS: native shortcut reuses Overview and GitHub subpage tabs without navigation or duplication");
+
+  const jitFixture = await fixture(
+    "https://repos.opensource.microsoft.com/orgs/Azure-Samples/repos/Durable-Task-Scheduler/jit",
+  );
+  const distinctOverview = await expectDestination(
+    page, "https://repos.opensource.microsoft.com/orgs/Azure-Samples/repos/Durable-Task-Scheduler",
+  );
+  await send("Target.closeTarget", { targetId: distinctOverview.targetId });
+  await send("Target.closeTarget", { targetId: jitFixture.targetId });
+  console.log("PASS: an existing JIT tab is not reused for an Overview action");
 
   for (const url of [
     "https://example.com", "https://github.com/other/repo",
@@ -242,6 +285,9 @@ try {
   workerSession = await attachWorker();
   console.log("PASS: native shortcut wakes a stopped service worker");
 
+  const otherWindowPortal = await fixture(
+    "https://repos.opensource.microsoft.com/orgs/microsoft/repos/vscode",
+  );
   const second = await fixture("https://github.com/microsoft/vscode/blob/main/README.md", true);
   const secondBefore = await evaluate(workerSession, "chrome.tabs.query({})");
   const secondSource = secondBefore.reduce((last, tab) => tab.id > last.id ? tab : last);
@@ -252,7 +298,8 @@ try {
   assert.equal(secondOpened.windowId, secondSource.windowId);
   assert.equal(secondOpened.active, true);
   await send("Target.closeTarget", { targetId: secondPortal.targetId });
-  console.log("PASS: invocation from a second window opens in that window");
+  await send("Target.closeTarget", { targetId: otherWindowPortal.targetId });
+  console.log("PASS: a matching tab in another window is not reused; new tab stays in the source window");
 
   for (const suffix of ["", "/jit?query=1#fragment"]) {
     await send("Page.navigate", {

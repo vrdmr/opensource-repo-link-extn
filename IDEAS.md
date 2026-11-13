@@ -1,6 +1,6 @@
 # GitHub Open Source Portal Extension: Ideas
 
-**Status:** version 0.2.0 is implemented for Microsoft Edge with Overview/JIT and portal-to-GitHub navigation. The user confirmed correct menu placement and working navigation in both directions. Safari on macOS and iPhone is now planned, not implemented; see [SAFARI_IMPLEMENTATION_PLAN.md](SAFARI_IMPLEMENTATION_PLAN.md). See [README.md](README.md) for current build/usage instructions and [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#implementation-status) for completed work.
+**Status:** version 0.3.0 adds approved same-window tab reuse to Overview/JIT and portal-to-GitHub navigation. Edge is natively verified. Safari desktop and iPhone source/build targets are implemented for development testing; native Safari/device validation and Apple packaging remain incomplete. See [SAFARI_IMPLEMENTATION_PLAN.md](SAFARI_IMPLEMENTATION_PLAN.md), [README.md](README.md) for setup, and [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#implementation-status) for completed work.
 
 ## The useful, small version
 
@@ -15,7 +15,7 @@ Return: https://github.com/{org}/{repo}
 
 Working name: **Open Source Portal Link**.
 
-The extension should feel like a browser shortcut, not another application. Edge needs no dashboard, login screen, popup, or GitHub page modifications. The planned iPhone variant uses a small action popup because Safari on iOS does not support extension context menus.
+The extension should feel like a browser shortcut, not another application. Desktop variants need no dashboard, login screen, popup, or GitHub page modifications. The iPhone variant uses a small action popup because Safari on iOS does not support extension context menus.
 
 ## Current Edge experience
 
@@ -26,7 +26,7 @@ The extension should feel like a browser shortcut, not another application. Edge
 | Toolbar icon | GitHub → portal Overview; portal → GitHub repository root, without a popup |
 | Keyboard | `Alt+Shift+O`, or `Option+Shift+O` on macOS; same behavior as the toolbar |
 
-Every successful invocation opens the selected destination in a new focused tab and leaves the original tab open. The original Overview shortcut is unchanged on GitHub; JIT is an explicit right-click choice. The user confirmed the overview MVP works and then authorized JIT and reverse navigation.
+Each invocation activates a matching destination in the source window without changing its URL, or opens a new focused tab if none can be reused. GitHub matches any subpage of the same repository; portal Overview and JIT remain separate. The source stays open. The original Overview shortcut is unchanged on GitHub; JIT is an explicit right-click choice.
 
 GitHub subpages identify the repository through the first two URL path segments. Portal sources must match `/orgs/{org}/repos/{repo}`; Overview, `/jit`, and other repository subpages return to the GitHub root.
 
@@ -53,19 +53,19 @@ Organization matching is case-insensitive. Generated links use the canonical org
 
 ## Design choices
 
-**Keep permissions narrow.** Edge uses only `activeTab` and `contextMenus`. Safari desktop starts with the same budget; the proposed iPhone popup starts with `activeTab` alone, subject to real grant tests. Read the current URL in response to an explicit action, rather than continuously watching tabs or reading page contents.
+**Keep permissions narrow.** Desktop API permissions are `activeTab` and `contextMenus`; iPhone uses `activeTab`. The user approved HTTPS host access limited to `github.com` and `repos.opensource.microsoft.com` for finding background destination tabs. Do not request broad `tabs`/`<all_urls>` access. Inspect URLs on explicit invocation, never through continuous monitoring or page-content reads; Safari grants still need native checks.
 
 **Accept a simple menu filter.** The menus can appear on repository-shaped GitHub/portal pages outside the allowlist. Invocation performs the real validation. Do not promise exact menu visibility for every frame or introduce continuous browsing access to achieve it.
 
-**Fail quietly but visibly.** Unsupported pages open nothing. A `!` badge and toolbar tooltip explain the issue. Pinning the extension makes this feedback easier to find.
+**Fail quietly but visibly.** Unsupported pages open nothing. Desktop uses a `!` badge and toolbar tooltip; iPhone shows inline popup status. Pinning the extension makes desktop feedback easier to find.
 
 **Let the portal own authentication.** The browser opens the portal normally, using the user's existing session or the portal's sign-in flow. The extension never handles credentials or bypasses access checks.
 
 **Do not equate an organization with open-source status.** This is only a URL mapping tool. It does not verify repository existence, visibility, licensing, or portal onboarding.
 
-**Keep the implementation small.** Use TypeScript, a compiler-only build, and a shared pure URL-mapping module. The current `dist/` and native smoke test still target Edge. Planned Safari manifests, entry points and outputs are isolated from Edge; do not duplicate routing logic or reinstate Chrome support.
+**Keep the implementation small.** Use TypeScript, a compiler-only build, and a shared pure URL-mapping module. The current `dist/` and native smoke test still target Edge. Safari manifests, entry points and outputs are isolated from Edge; do not duplicate routing logic or reinstate Chrome support.
 
-**Learn extension comparison.** The installed Learn Content Metrics extension's Details page displays `Read your browsing history` and `Display notifications`, with automatic read/change access on the Learn production, dev, PR-dev, and a localhost origin. That is broader than our URL launcher needs. The general site-permissions page contains origin defaults, not a raw list of requested extension permissions. Keep our two-permission design; see the [observed permission comparison](IMPLEMENTATION_PLAN.md#reference-learn-extension-permissions).
+**Learn extension comparison.** The installed Learn Content Metrics extension's Details page displays `Read your browsing history` and `Display notifications`, with automatic read/change access on Learn production, dev, PR-dev, and localhost. Do not copy those sites/permissions; our reuse feature needs only its two declared origins and no notifications. The general site-permissions page contains origin defaults, not requested extension permissions. See the [observed comparison](IMPLEMENTATION_PLAN.md#reference-learn-extension-permissions).
 
 ## Repository-to-portal mapping examples
 
@@ -100,7 +100,7 @@ Nested paths are illustrative; they do not assert that a particular issue, pull 
 
 ## Implemented: choose Overview or JIT
 
-Version 0.2.0 provides two explicit destinations in the GitHub context submenu:
+Version 0.2.0 introduced two explicit destinations in the GitHub context submenu, retained in 0.3.0:
 
 | Destination | URL shape |
 | --- | --- |
@@ -125,17 +125,17 @@ Opening JIT must only navigate to its page. The extension must not request or gr
 
 ## Implemented: return to GitHub
 
-On the portal Overview, JIT, or another repository subpage, `Open Repository on GitHub`, the toolbar, and the existing shortcut all open `https://github.com/{org}/{repo}` in a new focused tab. The same canonical organization spelling and repository case are preserved. Nested paths, query strings, and fragments are discarded.
+On the portal Overview, JIT, or another repository subpage, `Open Repository on GitHub`, the toolbar, and the existing shortcut activate an existing same-window GitHub repository page if available. Otherwise they open `https://github.com/{org}/{repo}`. New URLs preserve canonical organization/repository spelling and omit source nested paths, queries and fragments; reused tabs keep their current page intact.
 
-Reverse navigation does not add host permissions, page injection, or API calls. Portal landing pages, malformed routes, and unsupported organizations remain ineligible.
+The original reverse mapping needed no extra permissions; version 0.3.0's approved tab lookup adds only GitHub/portal host access. No page injection or GitHub/portal API calls are added. Portal landing pages, malformed routes, and unsupported organizations remain ineligible.
 
-## Planned: Safari on macOS and iPhone
+## Development implementation: Safari on macOS and iPhone
 
-Keep the working Edge release intact. Desktop Safari aims to retain the menu/toolbar/shortcut experience; iPhone uses a touch-friendly extension popup with Overview/JIT or GitHub buttons based on the source page. Both retain current-page validation, the eight organizations, new-tab behavior, and navigation-only JIT.
+Desktop Safari shares the menu/toolbar/shortcut handlers; iPhone uses a touch-friendly extension popup with Overview/JIT or GitHub buttons based on the source page. All targets share current-page validation, the eight organizations, same-window reuse/new-tab fallback, and navigation-only JIT. Mobile reuse is skipped if no usable source window ID exists.
 
-Apple compatibility, minimal permissions, source-tab handling, platform-specific builds, native Mac/iPhone checks, and containing-app signing/distribution require separate work. The [Safari implementation plan](SAFARI_IMPLEMENTATION_PLAN.md) records the approach, pending tasks, dependencies, and approval boundaries. No Safari implementation or publication has started.
+Separate builds are available in `build/safari/macos/` and `build/safari/ios/`. Recent desktop Safari can temporarily load its folder without Xcode. The iPhone target requires a containing iOS app; the helper generates separate native projects when full Xcode is available. The [Safari implementation plan](SAFARI_IMPLEMENTATION_PLAN.md) distinguishes completed source/tests from blocked native compatibility, packaging, and device checks. No Apple publication or account changes have occurred.
 
-## Ideas for later, beyond the planned Safari port
+## Ideas for later, beyond the Safari port
 
 | Idea | Why defer it |
 | --- | --- |
@@ -144,7 +144,6 @@ Apple compatibility, minimal permissions, source-tab handling, platform-specific
 | Copy the Overview or JIT URL | Useful for sharing, but adds another action and clipboard considerations |
 | Open the repository of a clicked link | A separate behavior from the confirmed current-page action |
 | Configurable organizations | Needs settings, validation, and persistence |
-| Reuse an existing portal tab | Requires inspecting existing tab URLs and revisiting permissions |
 | Edge Add-ons distribution | Documented post-MVP release path below; requires an authorized publisher and store review |
 
 Avoid adding portal status indicators, GitHub DOM buttons, repository search, or authentication integration unless a later concrete need justifies their complexity.
@@ -160,7 +159,7 @@ Confirmed direction and considerations for a later release:
 - **Publisher:** official Microsoft-branded publishing is deferred and is not required for the MVP. Choose an authorized publisher account only when ready for a separately approved release.
 - **Audience:** use a **Hidden** listing, as confirmed by the user, and share its installation URL directly. Hidden is not employee-only or private, and must still satisfy store review and production-quality policies. Public discovery is not currently planned.
 - **Listing:** explain the supported organizations, Overview/JIT choices, reverse navigation, all three entry points, and the portal's sign-in/access prerequisites. JIT navigation is not an access grant. Provide original branding and screenshots that expose no confidential portal or repository information.
-- **Privacy and review:** explain user-invoked URL processing, the two permissions, no analytics or credential handling, and the destination navigation. Provide a product-specific privacy policy and reviewer instructions for access-restricted portal behavior.
+- **Privacy and review:** explain user-invoked source/destination tab-URL processing, desktop API permissions and the two exact host grants, no analytics/credentials, and reuse/new navigation. Provide a product-specific privacy policy and reviewer instructions for access-restricted portal behavior.
 - **Maintenance:** release new versions through the same listing, with an increased manifest version and store review. Keep unpacked development installation separate from store distribution.
 
 This is release planning only; no account, store submission, or publishing action is authorized by adding it to the documents. Store acceptance is not guaranteed by the Learn example.
@@ -171,6 +170,6 @@ See [Publishing to Microsoft Edge Add-ons](IMPLEMENTATION_PLAN.md#publishing-to-
 
 The extension is successful when GitHub menus open the exact Overview/JIT URLs, portal actions open the GitHub repository root, toolbar/shortcut defaults are preserved, ineligible sources open nothing, and documented unpacked installation works. Eligibility means the agreed origins, path shapes, and organization allowlist, not independently verified repository existence.
 
-Version 0.2.0 passes the strict build, 23 automated cases, and expanded native headless Edge checks. The user confirmed correct menu placement and working navigation in both directions. Exhaustive context visibility, independently observed manual reload/update, and authenticated JIT access remain unverified; the implementation plan records these limits. Hidden store distribution remains deferred.
+All three target builds and 61 automated cases pass. Native Edge checks confirm two-origin permissions, same-window reuse without navigation/duplicate tabs, GitHub subpage preservation, Overview/JIT separation and other-window exclusion. Native Safari/device/app validation, exhaustive Edge contexts, independently observed manual reload/update, and authenticated JIT access remain unverified. Store distribution remains deferred.
 
 See `IMPLEMENTATION_PLAN.md` for the file layout, implementation steps, dependencies, and acceptance checks.

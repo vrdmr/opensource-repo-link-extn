@@ -1,6 +1,6 @@
 # Open Source Portal Extension: Implementation Plan
 
-**Status:** version 0.2.0 is implemented and working in Microsoft Edge. Overview, JIT, and portal-to-GitHub navigation are complete; the user confirmed correct menu placement and navigation in both directions. The strict build, 23 automated tests, and native Edge smoke checks pass. Edge remains the only currently supported browser. **Safari on macOS and iPhone is now planned, not implemented**, in [SAFARI_IMPLEMENTATION_PLAN.md](SAFARI_IMPLEMENTATION_PLAN.md).
+**Status:** version 0.3.0 implements approved same-window tab reuse with host access limited to GitHub and the Open Source Portal. Strict builds and all 61 automated tests pass; native Edge checks verify reuse and the two-origin permission budget. **Safari macOS/iPhone source and isolated builds are implemented**, but native Safari/device validation and Apple app packaging are not complete. See [SAFARI_IMPLEMENTATION_PLAN.md](SAFARI_IMPLEMENTATION_PLAN.md) for remaining gates.
 
 Read [README.md](README.md) for installation and usage, or [IDEAS.md](IDEAS.md) for the product brief. This document distinguishes completed implementation from remaining acceptance checks and separately deferred publishing.
 
@@ -17,8 +17,13 @@ Read [README.md](README.md) for installation and usage, or [IDEAS.md](IDEAS.md) 
 | `extend-navigation-actions` | Done | Overview/JIT submenu, reverse GitHub menu, and source-aware toolbar/shortcut defaults |
 | `verify-bidirectional-navigation` | Done | 23 automated cases, native Edge checks, and user-confirmed menu placement and navigation in both directions |
 | `document-expanded-navigation` | Done | README and product brief match the implemented Overview/JIT/reverse behavior |
-| `narrow-edge-support` | Done | Current Edge metadata, installation guidance, and `test:edge` runner remain intact; future Safari work uses separate targets |
-| `plan-safari-support` | Done, documentation only | macOS/iPhone interaction, shared-code/build design, dependencies, native validation, and Apple distribution plan; no Safari code yet |
+| `narrow-edge-support` | Done | Edge metadata, installation guidance, and `test:edge` runner remain intact; Safari uses separate targets |
+| `plan-safari-support` | Done | Original plan established desktop/mobile scope and gates; source implementation was authorized afterward |
+| `safari-shared-navigation` | Done, source/tests | Shared navigator and explicit desktop registration; Edge behavior and permissions preserved |
+| `safari-target-builds` | Done | Separate compiler entry points/manifests/resources outside `dist/`; exact target permissions and asset paths checked |
+| `safari-macos-entry` | Source done; runtime unverified | Shared desktop handlers and Safari-specific MV3 manifest; real Safari menus/shortcut/grants/wake still need testing |
+| `safari-iphone-popup` | Source done; runtime unverified | Accessible explicit destination popup, source-tab revalidation, inline errors and duplicate-tap prevention; no desktop API imports or background worker |
+| Same-window repository tab reuse | Done; Safari native check pending | Source-window/private-context filtering, GitHub subpage preservation, separate Overview/JIT matching, stale-candidate revalidation and new-tab fallback; explicit approval for two-origin host access |
 | `verify-extension` exhaustive manual matrix | Partial | Core checks above passed; remaining media/editable/frame contexts and independently observed manual reload/update are not recorded as passes |
 
 ### Remaining work, not implemented
@@ -26,25 +31,26 @@ Read [README.md](README.md) for installation and usage, or [IDEAS.md](IDEAS.md) 
 | Work | Status | Boundary |
 | --- | --- | --- |
 | Remaining Edge manual acceptance matrix | Pending | Complete and record the outstanding contexts/reload checks before store-release readiness |
-| Safari macOS and iPhone implementation | Planned | Shared routing, platform-specific entry points, isolated outputs and Apple packaging; [full plan and dependencies](SAFARI_IMPLEMENTATION_PLAN.md#implementation-sequence-and-dependencies) |
+| Safari native compatibility/device validation | Blocked | macOS build can be tested locally without Xcode; no native extension install was performed. iPhone simulator/device tooling requires full Xcode, absent here |
+| Safari containing apps | Partial / blocked | `package:safari` helper added, including safe missing-tool/overwrite checks; actual Apple project generation/signing/builds await full Xcode |
 | `prepare-edge-release` | Deferred | Package script, release ZIP validation, listing assets, privacy policy, and publisher readiness require separate release authorization |
 | `submit-edge-addons` | Deferred | Partner Center submission requires an authorized publisher and explicit final approval |
 | `verify-edge-release` | Deferred | Verify the actual certified store installation after publication |
 
 There is no store listing, automated `package:edge` script, or approved publishing action yet. The Edge release target remains a **Hidden Edge Add-ons** listing; official Microsoft-branded publishing is not required now. Safari packaging/distribution is planned separately, and Apple's visibility/publisher choices are not inherited from the Edge decision.
 
-### Planned Safari support
+### Safari implementation and validation boundary
 
-The new request supersedes the earlier decision not to plan additional browsers. It requests a plan, not implementation or publication. All Safari implementation tasks are pending; no Safari source, manifest, Apple project, account, or release was created.
+The user authorized implementing the Safari port after the earlier plan. Source, platform manifests/builds, popup UI, focused tests and a packaging helper are implemented. No Apple project, account change, signing, upload, or publication was performed. Native compatibility remains an explicit gate, not inferred from passing mocks.
 
 | Platform | Planned interaction | Implementation status |
 | --- | --- | --- |
-| Safari on macOS | Overview/JIT submenu, reverse GitHub menu, direct toolbar action and desktop shortcut | Not started |
-| Safari on iPhone | Touch-friendly extension popup: Overview/JIT on GitHub, Open on GitHub on portal pages; no unsupported iOS context menus | Not started |
+| Safari on macOS | Overview/JIT submenu, reverse GitHub menu, direct toolbar action and desktop shortcut | Built in `build/safari/macos/`; awaiting local Safari checks |
+| Safari on iPhone | Touch-friendly extension popup: Overview/JIT on GitHub, Open on GitHub on portal pages; no unsupported iOS context menus | Built in `build/safari/ios/`; awaiting containing app and simulator/physical-iPhone checks |
 
-The approach preserves the existing mapper/allowlist and keeps Edge's `dist/`, manifests, permissions, and behavior unchanged. Separate Safari manifests/output folders prevent mobile UI or unsupported APIs from leaking into Edge. Compatibility work must establish `activeTab` grants, source-tab binding, desktop worker behavior, and iPhone popup lifetime before support is claimed.
+The existing mapper/allowlist and Edge build contract are preserved. Desktop behavior is in `desktop-actions.ts`, called explicitly by both desktop entries; iPhone imports no desktop initialization. All targets now share the approved same-window reuse behavior and exact two-origin host grants. Separate manifests/compiler entries prevent contamination. Real Safari grants, source-tab/window binding, worker behavior, popup lifetime and reuse still need native validation.
 
-The [Safari plan](SAFARI_IMPLEMENTATION_PLAN.md) specifies proposed files/build commands, dependencies, permission budgets, accessibility and failure states, native desktop/physical-iPhone acceptance gates, and Apple signing/TestFlight/store requirements. Chrome remains out of scope.
+Safari 27.2 is installed locally, but only Command Line Tools are selected: full Xcode, the Safari packager/converter, and iPhone simulator are unavailable. Recent macOS Safari can load the generated folder temporarily without Xcode; [README instructions](README.md#test-locally-in-macos-safari-without-xcode) are ready for user testing. Chrome remains out of scope.
 
 ## Implemented goal
 
@@ -78,7 +84,7 @@ These examples demonstrate URL construction, not verified portal onboarding or a
 
 The repository URL mapper, Manifest V3 service worker, TypeScript build, original PNG icons, lockfile, automated tests, native Edge smoke test, and README are implemented. The loadable package is `dist/`.
 
-The overview MVP was authorized after design review and confirmed working by the user. The user then authorized JIT and reverse navigation. Version 0.2.0 implements both without changing permissions. Account registration, store submission, automatic access requests, settings, and a separate JIT shortcut remain outside scope.
+The overview MVP was authorized after design review and confirmed working by the user. Version 0.2.0 added JIT/reverse navigation without changing permissions. The user subsequently authorized Safari source work and then same-window reuse, including URL access limited to GitHub and the portal. Version 0.3.0 supersedes the earlier no-host/no-reuse design; it does not authorize account registration, publication, automatic JIT requests, settings, or another shortcut.
 
 ### Review findings and implemented safeguards
 
@@ -90,10 +96,10 @@ The managed npm proxy advertised cross-host tarballs that npm 12 rejected. Insta
 
 | Check | Result |
 | --- | --- |
-| Strict build and `npm test` | Pass for 0.2.0; 23 automated cases |
+| Strict builds and `npm test` | Pass for Edge and both Safari targets; 61 automated cases |
 | Managed-registry dependency restore | Previously verified clean; dependency versions unchanged |
-| Native headless Edge 157.0.4341.57 | Pass for 0.2.0 |
-| Native scope | Module loading, exact permissions/no hosts, all four menu registrations, actual shortcut navigation in both directions, unsupported-source rejection, feedback, client-side navigation, stopped-worker wake, focused source-window behavior |
+| Native headless Edge 157.0.4341.57 | Pass for 0.3.0 |
+| Native scope | Module loading, exact API/two-origin permissions, all four menus, shortcut navigation/reuse in both directions, preserved existing URLs/tab counts, Overview/JIT separation, other-window exclusion, unsupported sources, feedback, client-side navigation and stopped-worker wake |
 | JIT destination | Exact `/jit` mapping and menu handler verified by automated tests; native menu click not exercised |
 | Visible UI scope | User confirmed correct menu placement and working navigation in both directions; exhaustive selection/media/editable/frame visibility and independently observed manual reload/update remain outstanding |
 | Authenticated portal/JIT access and store certification | Not tested; outside this implementation |
@@ -104,13 +110,13 @@ Native tests used isolated temporary profiles and local source-page fixtures, no
 
 | Area | Decision |
 | --- | --- |
-| Browser | Desktop Microsoft Edge is implemented; Safari macOS/iPhone is planned separately |
+| Browser | Edge is natively verified; separate Safari macOS/iPhone development builds await native validation |
 | Language | TypeScript with a build step |
 | Initial installation | Load unpacked first; Edge Add-ons publishing is a documented post-MVP phase |
 | Edge Add-ons visibility | Hidden, shared by installation link; submission remains deferred |
 | Official Microsoft publishing | Deferred; Microsoft-branded publisher identity is not a current requirement |
 | Entry points | Page context menu, keyboard shortcut, and toolbar button |
-| Destination | Open the selected Overview/JIT/GitHub destination in a new focused tab; keep the source tab open |
+| Destination | Activate a matching tab in the source window without changing its URL, or open a new focused tab; source stays open |
 | Context menus | GitHub: Overview/JIT submenu; portal repository pages: Open Repository on GitHub |
 | Toolbar/shortcut default | GitHub → Overview; portal → GitHub repository root |
 | Shortcut | `Alt+Shift+O`; `Option+Shift+O` on macOS |
@@ -118,7 +124,7 @@ Native tests used isolated temporary profiles and local source-page fixtures, no
 | Organization matching | Only the eight organizations below, case-insensitively |
 | Menu visibility | Coarse GitHub/portal document/frame filters; validate the top-level source URL and direction on invocation |
 | Unsupported pages | Open nothing; show a `!` badge and explanatory toolbar tooltip |
-| Permissions | Only `activeTab` and `contextMenus` |
+| Permissions | `activeTab`, `contextMenus`, and exact HTTPS GitHub/portal host grants; no broad `tabs` permission |
 
 Supported organizations, with canonical spelling for generated portal URLs:
 
@@ -143,9 +149,9 @@ Supported sources are `https://github.com/{org}/{repo}` and `https://repos.opens
 
 **Two-origin execution boundary:** Overview/JIT actions require the exact top-level `https://github.com` origin and a supported repository path. The reverse action requires the exact `https://repos.opensource.microsoft.com` origin and `/orgs/{org}/repos/{repo}` route. Both enforce the eight-organization allowlist. Toolbar/shortcut select the direction from the source URL; explicit menu actions reject the opposite source site. Links or embedded frames cannot override the top-level source. Menu visibility is only a coarse document/frame filter, not this boundary.
 
-This boundary is enforced by URL validation. The `activeTab` permission itself is not restricted to a hostname: a user invocation can temporarily grant access on another origin, but the handler rejects unsupported URLs without reading page contents, logging URLs, or navigating. Do not describe this as persistent GitHub/portal host permission or add broader site access.
+URL validation enforces this boundary. `activeTab` is not hostname-scoped and can temporarily expose an unsupported source on invocation; the handler rejects it without reading contents, logging URLs, or navigating. Separately, version 0.3.0 has persistent-capability host grants for exactly GitHub and the portal, subject to browser/user access settings, to inspect matching destination-tab URLs on demand. These grants cover those origins, not only allowed organizations; runtime validation remains essential.
 
-The implemented Edge target has no popup, options page, injected GitHub UI, content script, backend, persistent storage, analytics, global operating-system shortcut, or portal-tab reuse. The planned iPhone popup is a platform-specific navigation UI, not a change to Edge or an injected webpage interface.
+The Edge target has no popup, options page, injected GitHub UI, content script, backend, persistent storage, analytics or global operating-system shortcut. On-demand tab reuse is implemented; there is no stored tab index or background URL polling. The iPhone popup is platform-specific navigation UI, not an injected webpage interface.
 
 ## Implemented navigation: Overview, JIT, and GitHub
 
@@ -172,7 +178,7 @@ Destination patterns:
 | JIT | `https://repos.opensource.microsoft.com/orgs/{org}/repos/{repo}/jit` | Explicit GitHub context submenu choice |
 | GitHub | `https://github.com/{org}/{repo}` | Portal context menu and toolbar/shortcut default |
 
-Overview has no `/overview` suffix; JIT appends exactly `/jit`. Reverse navigation discards portal subpaths, query strings, and fragments and always opens the GitHub root. The route examples came from the user; authenticated cross-repository page behavior has not been independently verified.
+Overview has no `/overview` suffix; JIT appends exactly `/jit`. A newly constructed reverse destination is the GitHub root without portal subpaths/query/fragment. Reuse instead preserves an existing GitHub repository page intact. The route examples came from the user; authenticated cross-repository behavior has not been independently verified.
 
 ### Features to evaluate later
 
@@ -188,7 +194,7 @@ Automated tests prove that Overview has no suffix, JIT appends exactly `/jit`, r
 
 ## Implemented architecture
 
-The implemented Edge extension uses Chromium `chrome.*` APIs, `@types/chrome`, and the manifest's `minimum_chrome_version`. These identifiers remain required for Edge; the planned Safari manifests will omit Chromium-only metadata. TypeScript compiles to native JavaScript ES modules using `tsc`; there is no framework or bundler.
+The implemented Edge extension uses Chromium `chrome.*` APIs, `@types/chrome`, and the manifest's `minimum_chrome_version`. The namespace is supported by Safari too; Safari manifests omit Chromium-only metadata. TypeScript compiles to native JavaScript ES modules using `tsc`; there is no framework or bundler.
 
 ### Project layout
 
@@ -200,10 +206,19 @@ README.md
 package.json
 package-lock.json
 tsconfig.json
+tsconfig.safari-macos.json
+tsconfig.safari-ios.json
 .gitignore
 src/
   repo-url.ts
+  navigation.ts
+  desktop-actions.ts
   service-worker.ts
+  safari/
+    macos-background.ts
+    popup-controller.ts
+    ios-popup.ts
+    theme.ts
 public/
   manifest.json
   icons/
@@ -215,16 +230,28 @@ scripts/
   clean.mjs
   copy-assets.mjs
   generate-icons.mjs
+  build-safari.mjs
+  package-safari.mjs
+safari/
+  macos/manifest.json
+  ios/manifest.json
+  ios/popup.html
+  ios/popup.css
 tests/
   edge-smoke.mjs
   repo-url.test.mjs
   service-worker.test.mjs
-dist/                         generated; load this folder in the browser
+  navigation.test.mjs
+  safari-*.test.mjs
+  helpers/desktop-tests.mjs
+dist/                         generated Edge resources
+build/safari/macos/            generated desktop Safari resources
+build/safari/ios/              generated iPhone Safari resources
 ```
 
 `dist/` contains the manifest, compiled modules, and icons only. Keep tests, source TypeScript, and development dependencies outside the loadable extension.
 
-### Manifest and module contract
+### Edge manifest and module contract
 
 | Setting | Required design |
 | --- | --- |
@@ -232,7 +259,7 @@ dist/                         generated; load this folder in the browser
 | Background | `service_worker: "service-worker.js"` and `type: "module"` inside `background` |
 | Toolbar | `action` with a title and icons; no `default_popup` |
 | Shortcut | `_execute_action`, with `Alt+Shift+O` as the default and macOS binding; macOS displays Alt as Option |
-| Permissions | Exactly `activeTab` and `contextMenus`; no host permissions |
+| Permissions | `activeTab`, `contextMenus`; `host_permissions` limited to the two exact HTTPS origins |
 | Assets | Manifest-relative PNG paths that exist in `dist/` |
 | Node module mode | Root `package.json` uses `"type": "module"` so `.mjs` tests can import emitted `.js` ES modules consistently |
 
@@ -247,9 +274,9 @@ This contract is necessary for the compiler-only approach: both the extension se
 - `scripts/copy-assets.mjs` copies the manifest and original PNG icons into `dist/` after compilation succeeds.
 - Node's built-in test runner and assertions run `.mjs` tests against the compiled production modules.
 - `npm run build` cleans generated output, compiles, and copies assets. Failed builds do not leave a stale loadable package.
-- `npm test` builds first and runs the 23 focused automated cases.
+- `npm test` builds all targets and runs 61 focused cases, including original mapper/desktop checks and reuse/race/boundary tests. `npm run test:safari` builds Safari and runs its focused tests.
 - `npm run test:edge -- "<Edge executable>"` builds and runs `tests/edge-smoke.mjs` in an isolated profile. The runner verifies the browser is Microsoft Edge.
-- The lockfile pins dependency versions and integrity without registry-specific download URLs. `node_modules/` and `dist/` are ignored.
+- The lockfile pins dependency versions and integrity without registry-specific download URLs. Dependencies, generated Edge/Safari outputs, packaged extensions and local Apple build/signing artifacts are ignored.
 - There is no separate linter or formatter configuration; no extra tooling stack was added.
 
 ### URL mapping: `src/repo-url.ts`
@@ -267,9 +294,9 @@ Keep parsing and destination construction pure and independent of browser APIs.
 
 Do not derive the repository from a selected link, selected text, image source, iframe URL, or GitHub page DOM. Do not invent a repository from an organization landing page.
 
-### Browser integration: `src/service-worker.ts`
+### Desktop integration: `src/desktop-actions.ts`
 
-Register event listeners at module top level so they work after service-worker suspension and restart. Keep one shared invocation function for validation, opening a tab, and feedback.
+Both desktop entry modules synchronously call `registerDesktopActions()` while loading, so listeners are available after service-worker restart. Keep one shared navigator for validation/opening, with desktop-specific feedback. Importing the navigator or popup must not register desktop listeners.
 
 **Context menu**
 
@@ -296,8 +323,9 @@ The coarse menu filters are not authorization or repository validation. They can
 
 **Opening and feedback**
 
-- On a valid invocation, call `chrome.tabs.create` with the computed URL, `active: true`, and the source tab's window ID.
-- Each successful invocation creates a new destination tab. Do not query for or reuse existing tabs.
+- On a valid invocation, query the destination origin in the source window. Validate candidate URL, repository, window/private context and absence of a different pending URL; re-read each eligible candidate before activating it with `tabs.update(id, { active: true })`. Never pass a new URL when reusing.
+- GitHub matches any page in the same repository case-insensitively. Overview matches the portal repository root; JIT matches `/jit` and nested JIT pages, never Overview or another section. Ignore query/fragment for matching, but preserve them on reused pages.
+- Skip closed, moved, changed or unreadable candidates. If no activation succeeds or lookup is denied/fails, create the computed destination with `active: true` in the source window. Do not search other windows or cross private contexts. On mobile without a usable window ID, skip reuse; popup dismissal cancels pending lookup before activation/creation.
 - Clear previous per-tab error feedback on the next invocation; restore the normal title after a successful operation.
 - Treat badge/title updates as best-effort UI. Their failure must not prevent URL validation or a valid tab-opening attempt; do not add background URL monitoring solely to refresh feedback.
 - Unsupported inputs must not create a tab. Use a per-tab `!` badge and `Open a supported GitHub repository or its Open Source Portal page.`
@@ -307,15 +335,21 @@ The coarse menu filters are not authorization or repository validation. They can
 
 ### Permissions
 
-The manifest declares exactly:
+Desktop API permissions remain:
 
 ```json
 ["activeTab", "contextMenus"]
 ```
 
-Each of the three user gestures grants temporary access to the source tab URL through `activeTab`. Creating a tab does not require the broad `tabs` permission.
+All target manifests additionally declare the user-approved host access:
 
-Do not request host permissions for GitHub or the portal, `<all_urls>`, `tabs`, `scripting`, `storage`, `notifications`, or clipboard access. Context-menu URL patterns filter visibility; they are not host permissions.
+```json
+["https://github.com/*", "https://repos.opensource.microsoft.com/*"]
+```
+
+The host grants expose background destination-tab URLs so they can be found/revalidated without the broad `tabs` permission. `activeTab` remains for explicit source gestures; iPhone omits `contextMenus`. Actual website access can be denied/revoked by the user, in which case lookup falls back safely. Browser warnings may describe read/change website-data capabilities, but the code reads tab metadata only on invocation.
+
+Do not add `<all_urls>`, `tabs`, `scripting`, `storage`, `notifications`, clipboard access, or more origins. Context-menu URL patterns remain visibility filters, not permissions.
 
 ### Reference: Learn extension permissions
 
@@ -331,7 +365,7 @@ These are the browser's displayed warnings and access settings, not an inspectio
 
 The separate `edge://settings/privacy/sitePermissions/...` page supplied by the user shows content settings for the extension's own `chrome-extension://` origin, including browser defaults. Its Location, Camera, Clipboard, and other entries are not proof that the extension requested all those permissions. No permissions or settings were changed during inspection.
 
-The Learn tool is a comparison, not a permission template. Our URL launcher does not need its notifications or persistent read/change access to those sites. Overview, JIT, and reverse navigation all retain only `activeTab` plus `contextMenus`.
+The Learn tool is a comparison, not a permission template. Our launcher needs none of its Learn/localhost grants or notifications. The approved reuse feature adds only the GitHub/portal host grants described above; navigation-only JIT itself requires no additional permissions.
 
 ## Completed verification and remaining acceptance checks
 
@@ -355,7 +389,8 @@ The Learn tool is a comparison, not a permission template. Our URL launcher does
 
 The worker tests stub only the required browser API surface and cover:
 
-- Context-menu and action handlers each create exactly one focused tab in the source window; unrelated menu item IDs do nothing.
+- Context-menu/action handlers create one focused tab when no match exists, or activate a matching source-window tab without updating its URL. Unrelated menu IDs do nothing.
+- Shared navigator tests cover case-insensitive repository matching, Overview/JIT section separation, candidate closure/change/move, private/window isolation, denied lookup, activation failure and popup cancellation.
 - Overview/JIT menu actions reject portal sources; reverse menu rejects GitHub sources. Toolbar/shortcut choose the direction from the validated source.
 - A clicked link or iframe URL cannot override the top-level source URL, including when an eligible GitHub/portal link or frame appears on an unrelated website.
 - Ineligible source URLs create no tab and produce per-tab feedback when a usable tab ID is available; missing source context never falls back to another tab.
@@ -369,21 +404,21 @@ Automated mocks cannot prove real browser permission grants, context-menu visibi
 The native smoke runner covers real permissions, shortcut dispatch, stopped-worker wake, navigation changes, and source-window behavior. The user confirmed that the menus appear in the right places and work in both directions. The list below remains the complete release checklist; it is not a claim that every visible interaction has been independently exercised.
 
 1. Build, enable Developer mode, and load `dist/` unpacked. Confirm the manifest and service worker load without errors.
-2. Pin the extension. From the supplied GitHub example, test both Overview and JIT submenu choices, the toolbar, and the shortcut. Overview is the toolbar/shortcut default; JIT appends exactly `/jit`. From portal Overview and JIT pages, test the reverse menu, toolbar, and shortcut. Each opens the exact destination in one focused source-window tab while leaving the source open.
+2. Pin the extension. Without matching destination tabs, test both Overview/JIT menus, toolbar and shortcut from GitHub, and reverse actions from portal Overview/JIT. Each creates the exact destination in one focused source-window tab. Repeat with matching tabs: activate without navigation/duplication; preserve GitHub subpages and keep Overview/JIT separate.
 3. Repeat from representative nested repository pages and after GitHub's client-side navigation. Confirm the URL is read at invocation, not cached from an earlier repository.
 4. Right-click page whitespace, selected text, a normal link, an image, and an editable field where the native browser context menu is available.
 5. Right-click a link to a different repository. Confirm the destination still corresponds to the current page.
 6. Try unsupported organizations on both sites, portal landing pages, and a normal unrelated website without matching embedded frames. No destination should open; feedback should explain unsupported input, and menus should be absent on the unrelated document. Embedded frames must not override top-level validation; record unexercised frame behavior rather than claiming perfect visibility.
 7. Verify shortcut assignment and remapping in Edge; use a different combination if the suggested shortcut conflicts locally.
 8. Let the service worker stop, then invoke again. Reload/update the extension and confirm the menu is not duplicated.
-9. With two browser windows open, confirm either direction opens in the source window.
-10. Inspect extension errors and confirm no broad host-access permissions or unexpected network requests are introduced.
+9. With two windows open, ensure a match only in the other window is ignored; reuse/create stays in the source window and private context.
+10. Inspect extension errors and the exact two-origin host/API permission budget. Test denied destination-site access and missing URL visibility; lookup should fall back to creation, never a guessed tab. No unexpected network requests or background polling.
 
 Portal sign-in or authorization failures are not URL-routing failures. Verify the constructed URL separately from authenticated portal access, which may require the user's account. If browser installation or account access is unavailable, record that limitation rather than claiming that end-to-end access was verified.
 
 ### MVP completion gate
 
-The Edge implementation and core functional validation are complete as recorded above. Full Edge release readiness still requires recording the remaining manual matrix, validating the release package, and meeting store requirements. Safari has separate future gates in its plan; it neither blocks the Edge release nor inherits Edge test results. A blocked or unrecorded check is not a pass.
+The Edge implementation and core functional validation are complete as recorded above. Full Edge release readiness still requires recording the remaining manual matrix, validating the release package, and meeting store requirements. Safari source is implemented but has separate native/device/package gates; it neither blocks the Edge release nor inherits Edge runtime results. A blocked or unrecorded check is not a pass.
 
 Correct JIT destination construction and reverse navigation are required and covered by tests. Authenticated portal/JIT access and store certification are separate concerns and are not claimed as validated.
 
@@ -397,7 +432,7 @@ Correct JIT destination construction and reverse navigation are required and cov
 - Shortcut conflicts and remapping.
 - Rebuilding and reloading after source changes.
 - The accepted menu-visibility tradeoff, unsupported-page feedback, portal authentication, and lack of repository-existence checks.
-- Why only `activeTab` and `contextMenus` are requested.
+- Why desktop API permissions are `activeTab`/`contextMenus`, iPhone omits menus, and the two host grants are needed to inspect background destination URLs.
 
 The store installation link and actual store-update verification are not available yet. They will be added only after the separately approved Edge release.
 
@@ -449,8 +484,9 @@ Hidden visibility is confirmed; publisher selection and actual submission are de
 | Single purpose | Navigate between a supported GitHub repository and its Microsoft open source management portal Overview/JIT pages |
 | `activeTab` | Read the current tab's URL only when the user explicitly invokes the context menu, toolbar action, or shortcut |
 | `contextMenus` | Add Overview/JIT choices on GitHub and a reverse GitHub action on repository portal pages |
+| GitHub/portal host permissions | Inspect matching destination-tab URLs on these two exact HTTPS origins only, on invocation, to activate an existing same-window tab |
 | Remote code | None; all extension JavaScript is included in the uploaded package |
-| Data handling | Process the active URL locally to extract organization/repository; do not retain browsing history, collect analytics, read page contents, or handle credentials |
+| Data handling | Process source and same-window destination-tab URLs locally; no retained history, tab index, analytics, page contents, or credentials |
 | Navigation disclosure | Opening the requested GitHub or portal page sends the organization/repository in the destination URL to that site, which manages its own session and data handling |
 
 Provide a product-specific privacy policy that accurately covers URL access and user-requested navigation even though the extension has no telemetry backend. Do not claim that it accesses no user data or makes no network navigation. Do not automatically copy Microsoft's privacy statement: Edge policy limits its use to official Microsoft extensions. Publisher/legal owners must approve the actual policy and Partner Center data-use answers.
@@ -487,7 +523,7 @@ There are no intentionally unresolved Edge MVP product choices. The user confirm
 
 ## Design review: complete
 
-Sol reviewed the Edge design before implementation. The review covered the two-permission model, top-level source validation versus menu visibility, MV3 module/lifecycle behavior, callback/promise error handling, shortcut dispatch, URL parsing, and validation limits. There is no outstanding request to start that review or implement the already completed Edge features. This does not constitute a Safari compatibility review. Automatic JIT access, settings, and publishing remain outside the implemented scope.
+Sol reviewed the original Edge design before implementation, including its initial two-permission model. Version 0.3.0's later user-approved two-origin host access/reuse supersedes the original no-host/no-reuse constraint and has focused/native Edge tests. The original review is not a Safari compatibility or new-permission review. Automatic JIT access, settings, and publishing remain outside the implemented scope.
 
 ## References
 
@@ -498,6 +534,7 @@ These Chromium API references describe the extension APIs used by Microsoft Edge
 - [Chromium commands and reserved action commands](https://developer.chrome.com/docs/extensions/reference/api/commands)
 - [Chromium toolbar actions, badges, and titles](https://developer.chrome.com/docs/extensions/reference/api/action)
 - [Chromium Tabs API permissions](https://developer.chrome.com/docs/extensions/reference/api/tabs)
+- [MDN: tab queries and host-permission URL visibility](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/tabs/query)
 - [Chromium URL match patterns](https://developer.chrome.com/docs/extensions/develop/concepts/match-patterns)
 - [Microsoft Edge unpacked extension setup](https://learn.microsoft.com/en-us/microsoft-edge/extensions/getting-started/extension-sideloading)
 - [Register as a Microsoft Edge extension developer](https://learn.microsoft.com/en-us/microsoft-edge/extensions/publish/create-dev-account)

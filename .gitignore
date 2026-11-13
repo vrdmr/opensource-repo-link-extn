@@ -24,8 +24,12 @@ DerivedData/
 xcuserdata/
 *.xcuserstate
 *.xcarchive/
+*.xcresult/
 *.dSYM/
+*.app/
+*.appex/
 *.ipa
 *.p12
+*.p8
 *.mobileprovision
 *.provisionprofile

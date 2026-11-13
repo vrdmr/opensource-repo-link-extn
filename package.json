@@ -1,6 +1,6 @@
 {
   "name": "open-source-portal-link",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Microsoft Edge extension for portal Overview/JIT and GitHub repository navigation.",
   "type": "module",
@@ -9,7 +9,12 @@
   },
   "scripts": {
     "build": "node scripts/clean.mjs && tsc && node scripts/copy-assets.mjs",
-    "test": "npm run build && node --test tests/*.test.mjs",
+    "build:safari:macos": "node scripts/build-safari.mjs macos",
+    "build:safari:ios": "node scripts/build-safari.mjs ios",
+    "build:safari": "node scripts/build-safari.mjs",
+    "package:safari": "node scripts/package-safari.mjs",
+    "test": "npm run build && npm run build:safari && node --test tests/*.test.mjs",
+    "test:safari": "npm run build:safari && node --test tests/navigation.test.mjs tests/safari-*.test.mjs",
     "test:edge": "npm run build && node tests/edge-smoke.mjs"
   },
   "devDependencies": {

@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "build/safari/ios"
+  },
+  "include": ["src/safari/ios-popup.ts", "src/safari/theme.ts"]
+}

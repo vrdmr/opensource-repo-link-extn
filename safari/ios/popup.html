@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Open Source Portal Link</title>
+    <script type="module" src="safari/theme.js"></script>
+    <link rel="stylesheet" href="popup.css">
+    <script type="module" src="safari/ios-popup.js"></script>
+  </head>
+  <body>
+    <main>
+      <h1>Open Source Portal Link</h1>
+      <p id="repository" class="repository" hidden></p>
+      <p id="status" role="status" aria-live="polite" aria-atomic="true">Reading the current repository...</p>
+      <div id="actions" aria-label="Repository destinations" hidden>
+        <button id="overview" type="button" disabled hidden>Open Overview</button>
+        <button id="jit" type="button" disabled hidden>Open JIT Access</button>
+        <button id="github" type="button" disabled hidden>Open on GitHub</button>
+      </div>
+      <p class="hint">JIT opens the portal page only. It never requests or grants access.</p>
+    </main>
+  </body>
+</html>

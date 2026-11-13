@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Open Source Portal Link",
+  "version": "0.3.0",
+  "description": "Choose portal Overview/JIT for a supported GitHub repository, or return to GitHub from the portal.",
+  "permissions": ["activeTab"],
+  "host_permissions": ["https://github.com/*", "https://repos.opensource.microsoft.com/*"],
+  "action": {
+    "default_title": "Open Source Portal Link",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
