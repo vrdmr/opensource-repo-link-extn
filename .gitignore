@@ -1,0 +1,31 @@
+# Dependencies and generated output
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Packaged extensions and logs
+*.zip
+*.crx
+*.log
+
+# Local configuration and editor files
+.env
+.env.*
+!.env.example
+.npmrc
+.idea/
+.vscode/
+.DS_Store
+
+# Generated Apple build files and local signing material
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcarchive/
+*.dSYM/
+*.ipa
+*.p12
+*.mobileprovision
+*.provisionprofile
